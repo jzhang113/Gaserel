@@ -3,28 +3,28 @@ using System.Collections.Generic;
 
 namespace Utils
 {
-    class AnimationHandler
+    public class AnimationHandler
     {
-        private IDictionary<int, List<IAnimation>> _current { get; }
+        private IDictionary<int, List<IAnimation>> Current { get; }
 
         public AnimationHandler()
         {
-            _current = new Dictionary<int, List<IAnimation>>();
+            Current = new Dictionary<int, List<IAnimation>>();
         }
 
-        public void Clear() => _current.Clear();
+        public void Clear() => Current.Clear();
 
         public void Add(int id, IAnimation animation)
         {
-            if (_current.TryGetValue(id, out List<IAnimation> queue))
+            if (Current.TryGetValue(id, out List<IAnimation> queue))
                 queue.Add(animation);
             else
-                _current.Add(id, new List<IAnimation>() { animation });
+                Current.Add(id, new List<IAnimation>() { animation });
         }
 
         public bool IsDone()
         {
-            foreach ((int _, List<IAnimation> queue) in _current)
+            foreach ((int _, List<IAnimation> queue) in Current)
             {
                 if (queue.Count != 0)
                     return false;
@@ -35,7 +35,7 @@ namespace Utils
 
         public void Run(TimeSpan frameTime, double remaining)
         {
-            foreach ((int _, List<IAnimation> queue) in _current)
+            foreach ((int _, List<IAnimation> queue) in Current)
             {
                 var removeList = new List<IAnimation>();
                 foreach (IAnimation animation in queue)
@@ -56,7 +56,7 @@ namespace Utils
 
         public void Draw()
         {
-            foreach ((int _, List<IAnimation> queue) in _current)
+            foreach ((int _, List<IAnimation> queue) in Current)
             {
                 foreach (IAnimation animation in queue)
                 {

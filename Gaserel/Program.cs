@@ -11,25 +11,20 @@ namespace Gaserel
 {
     internal class Game
     {
-        public static readonly TimeSpan FrameRate = new TimeSpan(TimeSpan.TicksPerSecond / 60);
         internal static AnimationHandler Animations;
+        internal static Random rand;
 
         private static readonly int Width = 10;
         private static readonly int Height = 10;
+
         private static ISettableMapView<double> densityMap;
 
         private static void Main(string[] args)
         {
-            Terminal.Open();
-            Terminal.Set(
-                $"window: size={15}x{15}," +
-                $"cellsize=auto, title='GeomanceRL';");
-            Terminal.Set("font: square.ttf, size = 12x12;");
-            Terminal.Set("input.filter = [keyboard]");
-
             Animations = new AnimationHandler();
-            var r = new Random();
+            rand = new Random();
 
+            var engine = new Engine(Width, Height, "Gaserel", Update, Render, Animations);
             var map = new Map(Width, Height, 1, GoRogue.Distance.MANHATTAN);
             ISettableMapView<bool> mapview = new ArrayMap<bool>(Width, Height);
             QuickGenerators.GenerateRectangleMap(mapview);
@@ -40,55 +35,21 @@ namespace Gaserel
             
             for (int i = 0; i < 10 * 10; i++)
             {
-                densityMap[i] = r.NextDouble();
+                densityMap[i] = rand.NextDouble();
             }
 
-            Render();
-            Run();
-        }
-
-        private static void Run()
-        {
-            const int updateLimit = 10;
-            bool exiting = false;
-            DateTime currentTime = DateTime.UtcNow;
-            var accum = new TimeSpan();
-
-            TimeSpan maxDt = FrameRate * updateLimit;
-
-            while (!exiting)
-            {
-                DateTime newTime = DateTime.UtcNow;
-                TimeSpan frameTime = newTime - currentTime;
-                if (frameTime > maxDt)
-                {
-                    frameTime = maxDt;
-                }
-
-                currentTime = newTime;
-                accum += frameTime;
-
-                while (accum >= FrameRate)
-                {
-                    if (Terminal.HasInput())
-                    {
-                        exiting = Update(Terminal.Read());
-                        //RunSystems();
-                    }
-
-                    accum -= FrameRate;
-                }
-
-                double remaining = accum / FrameRate;
-                Animations.Run(frameTime, remaining);
-                Render();
-            }
-
-            Terminal.Close();
+            engine.Start();
+            engine.Run();
         }
 
         private static bool Update(int input)
         {
+            switch (input)
+            {
+                case Terminal.TK_CLOSE:
+                    return true;
+            }
+
             for (int row = 0; row < 10; row++)
             {
                 Vector<double> rowVector = ExtractRow(densityMap, row);
@@ -103,8 +64,20 @@ namespace Gaserel
                 ApplyCol(densityMap, col, colVector);
             }
 
-            Render();
             return false;
+        }
+
+        private static void Render(double dt)
+        {
+            IMapView<double> map = densityMap;
+
+            for (int i = 0; i < Width * Height; i++)
+            {
+                Terminal.Color(Color.FromArgb(Math.Clamp((int)(map[i] * 256), 0, 255), 255, 255, 255));
+                Terminal.Put(i % 10, i / 10, '█');
+            }
+
+            Terminal.Refresh();
         }
 
         private static Vector<double> ExtractRow(ISettableMapView<double> densityMap, int row)
@@ -143,26 +116,6 @@ namespace Gaserel
             {
                 densityMap[row, col] = colVector[row];
             }
-        }
-
-        private static void Render()
-        {
-            IMapView<double> map = densityMap;
-
-            for (int i = 0; i < Width * Height; i++)
-            {
-                Terminal.Color(Color.FromArgb(Clamp((int)(map[i] * 256), 0, 255), 255, 255, 255));
-                Terminal.Put(i % 10, i / 10, '█');
-            }
-
-            Terminal.Refresh();
-        }
-
-        public static T Clamp<T>(T val, T min, T max) where T : IComparable<T>
-        {
-            if (val.CompareTo(min) < 0) return min;
-            else if (val.CompareTo(max) > 0) return max;
-            else return val;
         }
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Utils
 {
-    internal static class Colors
+    public static class Colors
     {
         public static Color Blend(this in Color c1, in Color c2, double alpha)
         {
