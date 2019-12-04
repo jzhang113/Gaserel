@@ -17,7 +17,11 @@ namespace Gaserel
         private static readonly int Width = 10;
         private static readonly int Height = 10;
 
+        private static ISettableMapView<double> zero;
         private static ISettableMapView<double> densityMap;
+        private static ISettableMapView<double> prevDensityMap;
+        private static ISettableMapView<(double, double)> velocityMap;
+        private static ISettableMapView<(double, double)> prevVelocityMap;
 
         private static void Main(string[] args)
         {
@@ -30,13 +34,11 @@ namespace Gaserel
             QuickGenerators.GenerateRectangleMap(mapview);
             map.ApplyTerrainOverlay(mapview, (pos, val) => val ? TerrainFactory.Floor(pos) : TerrainFactory.Wall(pos));
 
+            zero = new ArrayMap<double>(Width, Height);
             densityMap = new ArrayMap<double>(Width, Height);
-            ISettableMapView<double> velocity = new ArrayMap<double>(Width, Height);
-            
-            for (int i = 0; i < 10 * 10; i++)
-            {
-                densityMap[i] = rand.NextDouble();
-            }
+            prevDensityMap = new ArrayMap<double>(Width, Height);
+            velocityMap = new ArrayMap<(double, double)>(Width, Height);
+            prevVelocityMap = new ArrayMap<(double, double)>(Width, Height);
 
             engine.Start();
             engine.Run();
@@ -44,24 +46,19 @@ namespace Gaserel
 
         private static bool Update(int input)
         {
+            // densityMap.ApplyOverlay(zero);
+
             switch (input)
             {
                 case Terminal.TK_CLOSE:
                     return true;
-            }
-
-            for (int row = 0; row < 10; row++)
-            {
-                Vector<double> rowVector = ExtractRow(densityMap, row);
-                rowVector = Diffusion.ForwardStep(rowVector, 0.1, 0.05);
-                ApplyRow(densityMap, row, rowVector);
-            }
-
-            for (int col = 0; col < 10; col++)
-            {
-                Vector<double> colVector = ExtractCol(densityMap, col);
-                colVector = Diffusion.ForwardStep(colVector, 0.1, 0.05);
-                ApplyCol(densityMap, col, colVector);
+                case Terminal.TK_Z:
+                    densityMap[55] = 100;
+                    velocityMap[55] = (-10, 5);
+                    break;
+                case Terminal.TK_SPACE:
+                    Diffusion.Update(densityMap, prevDensityMap, velocityMap, prevVelocityMap);
+                    break;
             }
 
             return false;
@@ -73,49 +70,11 @@ namespace Gaserel
 
             for (int i = 0; i < Width * Height; i++)
             {
-                Terminal.Color(Color.FromArgb(Math.Clamp((int)(map[i] * 256), 0, 255), 255, 255, 255));
+                Terminal.Color(Color.FromArgb(Math.Clamp((int)(map[i] * 256 / 10), 0, 255), 255, 255, 255));
                 Terminal.Put(i % 10, i / 10, '█');
             }
 
             Terminal.Refresh();
-        }
-
-        private static Vector<double> ExtractRow(ISettableMapView<double> densityMap, int row)
-        {
-            double[] store = new double[Width];
-            for (int col = 0; col < Width; col++)
-            {
-                store[col] = densityMap[row, col];
-            }
-
-            return Vector<double>.Build.Dense(store);
-        }
-
-        private static void ApplyRow(ISettableMapView<double> densityMap, int row, Vector<double> rowVector)
-        {
-            for (int col = 0; col < Height; col++)
-            {
-                densityMap[row, col] = rowVector[col];
-            }
-        }
-
-        private static Vector<double> ExtractCol(ISettableMapView<double> densityMap, int col)
-        {
-            double[] store = new double[Width];
-            for (int row = 0; row < Height; row++)
-            {
-                store[row] = densityMap[row, col];
-            }
-
-            return Vector<double>.Build.Dense(store);
-        }
-
-        private static void ApplyCol(ISettableMapView<double> densityMap, int col, Vector<double> colVector)
-        {
-            for (int row = 0; row < Height; row++)
-            {
-                densityMap[row, col] = colVector[row];
-            }
         }
     }
 }
