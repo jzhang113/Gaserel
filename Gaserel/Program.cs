@@ -1,8 +1,8 @@
 ﻿using BearLib;
+using GoRogue;
 using GoRogue.GameFramework;
 using GoRogue.MapGeneration;
 using GoRogue.MapViews;
-using MathNet.Numerics.LinearAlgebra;
 using System;
 using System.Drawing;
 using Utils;
@@ -13,53 +13,64 @@ namespace Gaserel
     {
         internal static AnimationHandler Animations;
         internal static Random rand;
+        internal static Diffusion diffu;
 
         private static readonly int Width = 10;
         private static readonly int Height = 10;
 
-        private static ISettableMapView<double> zero;
         private static ISettableMapView<double> densityMap;
-        private static ISettableMapView<double> prevDensityMap;
         private static ISettableMapView<(double, double)> velocityMap;
-        private static ISettableMapView<(double, double)> prevVelocityMap;
+        private static ISettableMapView<double> newDensityMap;
+        private static ISettableMapView<(double, double)> newVelocityMap;
 
         private static void Main(string[] args)
         {
             Animations = new AnimationHandler();
             rand = new Random();
 
-            var engine = new Engine(Width, Height, "Gaserel", Update, Render, Animations);
-            var map = new Map(Width, Height, 1, GoRogue.Distance.MANHATTAN);
+            var engine = new Engine(Width, Height, "Gaserel", true, StepUpdate, Render, Animations);
+
+            var map = new Map(Width, Height, 1, Distance.MANHATTAN);
             ISettableMapView<bool> mapview = new ArrayMap<bool>(Width, Height);
             QuickGenerators.GenerateRectangleMap(mapview);
             map.ApplyTerrainOverlay(mapview, (pos, val) => val ? TerrainFactory.Floor(pos) : TerrainFactory.Wall(pos));
 
-            zero = new ArrayMap<double>(Width, Height);
             densityMap = new ArrayMap<double>(Width, Height);
-            prevDensityMap = new ArrayMap<double>(Width, Height);
             velocityMap = new ArrayMap<(double, double)>(Width, Height);
-            prevVelocityMap = new ArrayMap<(double, double)>(Width, Height);
+            newDensityMap = new ArrayMap<double>(Width, Height);
+            newVelocityMap = new ArrayMap<(double, double)>(Width, Height);
+
+            diffu = new Diffusion(densityMap, velocityMap);
 
             engine.Start();
             engine.Run();
         }
 
-        private static bool Update(int input)
+        private static bool StepUpdate(int input)
         {
-            // densityMap.ApplyOverlay(zero);
+            foreach (Coord p in newDensityMap.Positions())
+            {
+                newDensityMap[p] = 0;
+                newVelocityMap[p] = (0, 0);
+            }
 
             switch (input)
             {
+                case Terminal.TK_ESCAPE:
                 case Terminal.TK_CLOSE:
                     return true;
-                case Terminal.TK_Z:
-                    densityMap[55] = 100;
-                    velocityMap[55] = (-10, 5);
-                    break;
-                case Terminal.TK_SPACE:
-                    Diffusion.Update(densityMap, prevDensityMap, velocityMap, prevVelocityMap);
-                    break;
             }
+
+            if (Terminal.Check(Terminal.TK_MOUSE_LEFT))
+            {
+                var pos = new Coord(Terminal.State(Terminal.TK_MOUSE_X), Terminal.State(Terminal.TK_MOUSE_Y));
+                newDensityMap[55] = 20;
+                var d = Coord.EuclideanDistanceMagnitude(pos, new Coord(5, 5));
+                d = Math.Sqrt(d);
+                newVelocityMap[55] = (d * (pos.X - 5) * 50, d * (pos.Y - 5) * 50);
+            }
+
+            diffu.Update(newDensityMap, newVelocityMap, (double)Engine.FrameRate.Ticks / TimeSpan.TicksPerSecond);
 
             return false;
         }
@@ -70,7 +81,7 @@ namespace Gaserel
 
             for (int i = 0; i < Width * Height; i++)
             {
-                Terminal.Color(Color.FromArgb(Math.Clamp((int)(map[i] * 256 / 10), 0, 255), 255, 255, 255));
+                Terminal.Color(Color.FromArgb(Math.Clamp((int)(map[i] * 256), 0, 255), 255, 255, 255));
                 Terminal.Put(i % 10, i / 10, '█');
             }
 

@@ -7,13 +7,15 @@ namespace Utils
     {
         public static readonly TimeSpan FrameRate = new TimeSpan(TimeSpan.TicksPerSecond / 60);
 
-        private Func<int, bool> Update { get; }
+        private bool RealTime { get; }
+        private Func<int, bool> StepUpdate { get; }
         private Action<double> Render { get; }
         private AnimationHandler Animations { get; }
 
-        public Engine(int width, int height, string title, Func<int, bool> update, Action<double> render, AnimationHandler animations)
+        public Engine(int width, int height, string title, bool realTime, Func<int, bool> stepUpdate, Action<double> render, AnimationHandler animations)
         {
-            Update = update;
+            RealTime = realTime;
+            StepUpdate = stepUpdate;
             Render = render;
             Animations = animations;
 
@@ -22,7 +24,7 @@ namespace Utils
                 $"window: size={width}x{height}," +
                 $"cellsize=auto, title='{title}';");
             Terminal.Set("font: square.ttf, size = 12x12;");
-            Terminal.Set("input.filter = [keyboard]");
+            Terminal.Set("input.filter = [keyboard, mouse]");
         }
 
         public void Start()
@@ -55,7 +57,11 @@ namespace Utils
                 {
                     if (Terminal.HasInput())
                     {
-                        exiting = Update(Terminal.Read());
+                        exiting = StepUpdate(Terminal.Read());
+                    }
+                    else if (RealTime)
+                    {
+                        exiting = StepUpdate(-1);
                     }
 
                     accum -= FrameRate;

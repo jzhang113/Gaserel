@@ -5,29 +5,36 @@ using System;
 namespace Gaserel
 {
     // based on Jos Stam, "Real-Time Fluid Dynamics for Games". Proceedings of the Game Developer Conference, March 2003.
-    // http://www.dgp.toronto.edu/people/stam/reality/Research/pub.html
+    // https://pdfs.semanticscholar.org/847f/819a4ea14bd789aca8bc88e85e906cfc657c.pdf
     internal class Diffusion
     {
-        private const int iters = 20;
+        private const int iters = 50;
 
-        public static void Update(ISettableMapView<double> density, ISettableMapView<double> prevDensity, ISettableMapView<(double, double)> velocity, ISettableMapView<(double, double)> prevVelocity)
+        private ISettableMapView<double> Density { get; }
+        private ISettableMapView<(double, double)> Velocity { get; }
+
+        public Diffusion(ISettableMapView<double> density, ISettableMapView<(double, double)> velocity)
         {
-            UpdateVelocity(velocity, prevVelocity, 0.01, 0.01);
-            UpdateDensity(density, prevDensity, velocity, 0.1, 0.01);
+            Density = density;
+            Velocity = velocity;
+        }
 
-            foreach (Coord p in density.Positions())
+        public void Update(ISettableMapView<double> newDensity, ISettableMapView<(double, double)> newVelocity, double dt)
+        {
+            foreach (Coord p in Density.Positions())
             {
-                density[p] *= 0.9;
-                velocity[p] = (velocity[p].Item1 * 0.9, velocity[p].Item2 * 0.9);
+                double decay = Math.Pow(1 - 0.4, dt);
+                Density[p] *= decay;
             }
+
+            UpdateVelocity(Velocity, newVelocity, 0.01, dt);
+            UpdateDensity(Density, newDensity, Velocity, 0.1, dt);
         }
 
         private static void UpdateDensity(ISettableMapView<double> density, ISettableMapView<double> prev, IMapView<(double, double)> velocity, double coeff, double dt)
         {
             AddSource(density, prev, dt);
-            Swap(density, prev);
-            Diffuse(0, density, prev, coeff, dt);
-            Swap(density, prev);
+            Diffuse(0, prev, density, coeff, dt);
             Advect(0, density, prev, velocity, dt);
         }
 
@@ -40,11 +47,11 @@ namespace Gaserel
 
             AddSource(vx, px, dt);
             AddSource(vy, py, dt);
-            Swap(velocity, prev);
-            Diffuse(1, vx, px, visc, dt);
-            Diffuse(1, vy, py, visc, dt);
-            Project(velocity, px, py);
-            Swap(velocity, prev);
+
+            Diffuse(1, px, vx, visc, dt);
+            Diffuse(1, py, vy, visc, dt);
+            Project(prev, vx, vy);
+
             Advect(1, vx, px, prev, dt);
             Advect(1, vy, py, prev, dt);
             Project(velocity, px, py);
@@ -55,14 +62,11 @@ namespace Gaserel
 
         private static void Project(ISettableMapView<(double, double)> velocity, ISettableMapView<double> p, ISettableMapView<double> div)
         {
-            double n = Math.Min(velocity.Width, velocity.Height);
-            double h = 1 / n;
-
             for (int x = 1; x < velocity.Width - 1; x++)
             {
                 for (int y = 1; y < velocity.Height - 1; y++)
                 {
-                    div[x, y] = -0.5 * h * (velocity[x + 1, y].Item1 - velocity[x - 1, y].Item1 + velocity[x, y + 1].Item2 + velocity[x, y - 1].Item2);
+                    div[x, y] = -0.5 / velocity.Width * (velocity[x + 1, y].Item1 - velocity[x - 1, y].Item1) -0.5 / velocity.Height * (velocity[x, y + 1].Item2 - velocity[x, y - 1].Item2);
                     p[x, y] = 0;
                 }
             }
@@ -89,25 +93,24 @@ namespace Gaserel
                 for (int y = 1; y < velocity.Height - 1; y++)
                 {
                     (double vx, double vy) = velocity[x, y];
-                    velocity[x, y] = (vx - 0.5 * (p[x + 1, y] - p[x - 1, y]) / h, vy - 0.5 * (p[x, y+1] - p[x, y-1]) / h);
+                    velocity[x, y] = (vx - 0.5 * (p[x + 1, y] - p[x - 1, y]) * velocity.Width, vy - 0.5 * (p[x, y+1] - p[x, y-1]) * velocity.Height);
                 }
             }
 
-            SetBoundary(2, GetVx(velocity));
-            SetBoundary(1, GetVy(velocity));
+            SetBoundary(1, GetVx(velocity));
+            SetBoundary(2, GetVy(velocity));
         }
 
         private static void Advect(int b, ISettableMapView<double> density, IMapView<double> prev, IMapView<(double, double)> velocity, double dt)
         {
             double n = Math.Min(density.Width, density.Height);
-            double dt0 = dt * n;
 
             for (int x = 1; x < density.Width - 1; x++)
             {
                 for (int y = 1; y < density.Height - 1; y++)
                 {
-                    double xVal = x - dt0 * velocity[x, y].Item1;
-                    double yVal = y - dt0 * velocity[x, y].Item2;
+                    double xVal = x - dt * density.Width * velocity[x, y].Item1;
+                    double yVal = y - dt * density.Height * velocity[x, y].Item2;
 
                     xVal = Math.Clamp(xVal, 0.5, density.Width - 1.5);
                     int i0 = (int)xVal;
@@ -164,14 +167,14 @@ namespace Gaserel
 
             for (int x = 1; x < w - 1; x++)
             {
-                density[x, 0] = b == 1 ? -density[x, 1] : density[x, 1];
-                density[x, h - 1] = b == 1 ? -density[x, h - 2] : density[x, h - 2];
+                density[x, 0] = b == 2 ? -density[x, 1] : density[x, 1];
+                density[x, h - 1] = b == 2 ? -density[x, h - 2] : density[x, h - 2];
             }
 
             for (int j = 1; j < h - 1; j++)
             {
-                density[0, j] = b == 2 ? -density[1, j] : density[1, j];
-                density[w - 1, j] = b == 2 ? -density[w - 2, j] : density[w - 2, j];
+                density[0, j] = b == 1 ? -density[1, j] : density[1, j];
+                density[w - 1, j] = b == 1 ? -density[w - 2, j] : density[w - 2, j];
             }
 
             density[0, 0] = 0.5 * (density[1, 0] + density[0, 1]);
