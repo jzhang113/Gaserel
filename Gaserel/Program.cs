@@ -15,8 +15,9 @@ namespace Gaserel
         internal static Random rand;
         internal static Diffusion diffu;
 
-        private static readonly int Width = 10;
-        private static readonly int Height = 10;
+        private static readonly int Width = 80;
+        private static readonly int Height = 80;
+        private static Coord me = (5, 5);
 
         private static ISettableMapView<double> densityMap;
         private static ISettableMapView<(double, double)> velocityMap;
@@ -54,20 +55,37 @@ namespace Gaserel
                 newVelocityMap[p] = (0, 0);
             }
 
+            int dx = 0;
+            int dy = 0;
+
             switch (input)
             {
                 case Terminal.TK_ESCAPE:
                 case Terminal.TK_CLOSE:
                     return true;
+                case Terminal.TK_A:
+                    dx = -1;
+                    break;
+                case Terminal.TK_D:
+                    dx = 1;
+                    break;
+                case Terminal.TK_W:
+                    dy = -1;
+                    break;
+                case Terminal.TK_S:
+                    dy = 1;
+                    break;
             }
+
+            me = me.Translate(dx, dy);
 
             if (Terminal.Check(Terminal.TK_MOUSE_LEFT))
             {
                 var pos = new Coord(Terminal.State(Terminal.TK_MOUSE_X), Terminal.State(Terminal.TK_MOUSE_Y));
-                newDensityMap[55] = 20;
-                var d = Coord.EuclideanDistanceMagnitude(pos, new Coord(5, 5));
+                newDensityMap[me] = 200;
+                var d = Coord.EuclideanDistanceMagnitude(pos, me);
                 d = Math.Sqrt(d);
-                newVelocityMap[55] = (d * (pos.X - 5) * 50, d * (pos.Y - 5) * 50);
+                newVelocityMap[me] = (d * (pos.X - me.X) * 50, d * (pos.Y - me.Y) * 50);
             }
 
             diffu.Update(newDensityMap, newVelocityMap, (double)Engine.FrameRate.Ticks / TimeSpan.TicksPerSecond);
@@ -82,7 +100,7 @@ namespace Gaserel
             for (int i = 0; i < Width * Height; i++)
             {
                 Terminal.Color(Color.FromArgb(Math.Clamp((int)(map[i] * 256), 0, 255), 255, 255, 255));
-                Terminal.Put(i % 10, i / 10, '█');
+                Terminal.Put(i % Width, i / Width, '█');
             }
 
             Terminal.Refresh();
