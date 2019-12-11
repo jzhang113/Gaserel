@@ -1,10 +1,12 @@
 ﻿using BearLib;
+using Gaserel.Components;
 using GoRogue;
 using GoRogue.GameFramework;
 using GoRogue.MapGeneration;
 using GoRogue.MapViews;
 using System;
 using System.Drawing;
+using System.Linq;
 using Utils;
 
 namespace Gaserel
@@ -15,10 +17,11 @@ namespace Gaserel
         internal static Random rand;
         internal static Diffusion diffu;
 
-        private static readonly int Width = 80;
-        private static readonly int Height = 80;
+        private static readonly int Width = 60;
+        private static readonly int Height = 60;
         private static Coord me = (5, 5);
 
+        private static Map map;
         private static ISettableMapView<double> densityMap;
         private static ISettableMapView<(double, double)> velocityMap;
         private static ISettableMapView<double> newDensityMap;
@@ -31,9 +34,9 @@ namespace Gaserel
 
             var engine = new Engine(Width, Height, "Gaserel", true, StepUpdate, Render, Animations);
 
-            var map = new Map(Width, Height, 1, Distance.MANHATTAN);
+            map = new Map(Width, Height, 1, Distance.MANHATTAN);
             ISettableMapView<bool> mapview = new ArrayMap<bool>(Width, Height);
-            QuickGenerators.GenerateRectangleMap(mapview);
+            QuickGenerators.GenerateRandomRoomsMap(mapview, 20, 8, 20);
             map.ApplyTerrainOverlay(mapview, (pos, val) => val ? TerrainFactory.Floor(pos) : TerrainFactory.Wall(pos));
 
             densityMap = new ArrayMap<double>(Width, Height);
@@ -88,20 +91,27 @@ namespace Gaserel
                 newVelocityMap[me] = (d * (pos.X - me.X) * 50, d * (pos.Y - me.Y) * 50);
             }
 
-            diffu.Update(newDensityMap, newVelocityMap, (double)Engine.FrameRate.Ticks / TimeSpan.TicksPerSecond);
+            diffu.Update(newDensityMap, newVelocityMap, map.WalkabilityView, (double)Engine.FrameRate.Ticks / TimeSpan.TicksPerSecond);
 
             return false;
         }
 
         private static void Render(double dt)
         {
-            IMapView<double> map = densityMap;
-
+            Terminal.Layer(1);
             for (int i = 0; i < Width * Height; i++)
             {
-                Terminal.Color(Color.FromArgb(Math.Clamp((int)(map[i] * 256), 0, 255), 255, 255, 255));
+                Terminal.Color(Color.FromArgb(Math.Clamp((int)(densityMap[i] * 256), 0, 255), 255, 255, 255));
                 Terminal.Put(i % Width, i / Width, '█');
             }
+
+            Terminal.Layer(2);
+            foreach (Coord p in map.Positions())
+            {
+                map.Terrain[p].GetComponent<DrawComponent>()?.Draw();
+            }
+
+            Terminal.Put(me, '@');
 
             Terminal.Refresh();
         }
