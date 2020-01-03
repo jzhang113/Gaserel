@@ -10,16 +10,11 @@ namespace Gaserel
     {
         private const int iters = 20;
 
-        private ISettableMapView<double> Density { get; }
-        private ISettableMapView<(double, double)> Velocity { get; }
-
-        public Diffusion(ISettableMapView<double> density, ISettableMapView<(double, double)> velocity)
-        {
-            Density = density;
-            Velocity = velocity;
-        }
-
-        public void Update(ISettableMapView<double> newDensity, ISettableMapView<(double, double)> newVelocity, IMapView<bool> boundary, double dt)
+        public static void Update(
+            ISettableMapView<double> density, ISettableMapView<double> newDensity,
+            ISettableMapView<(double, double)> velocity,
+            ISettableMapView<(double, double)> newVelocity,
+            IMapView<bool> boundary, double dt)
         {
             //foreach (Coord p in Density.Positions())
             //{
@@ -36,19 +31,19 @@ namespace Gaserel
             var py = new ArrayMap<double>(w, h);
             var walk = new ArrayMap<bool>(w, h);
 
-            foreach (Coord p in Velocity.Positions())
+            foreach (Coord p in velocity.Positions())
             {
-                (vx[p], vy[p]) = Velocity[p];
+                (vx[p], vy[p]) = velocity[p];
                 (px[p], py[p]) = newVelocity[p];
                 walk[p] = boundary[p];
             }
 
             UpdateVelocity(vx, vy, px, py, walk, 0.01, dt);
-            UpdateDensity(Density, newDensity, vx, vy, walk, 0.1, dt);
+            UpdateDensity(density, newDensity, vx, vy, walk, 0.1, dt);
 
             foreach (Coord p in vx.Positions())
             {
-                Velocity[p] = (vx[p], vy[p]);
+                velocity[p] = (vx[p], vy[p]);
             }
         }
 
