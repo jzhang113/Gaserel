@@ -8,20 +8,14 @@ namespace Gaserel
     // https://pdfs.semanticscholar.org/847f/819a4ea14bd789aca8bc88e85e906cfc657c.pdf
     internal class Diffusion
     {
-        private const int iters = 20;
+        private const int iters = 8;
 
         public static void Update(
             ISettableMapView<double> density, ISettableMapView<double> newDensity,
             ISettableMapView<(double, double)> velocity,
             ISettableMapView<(double, double)> newVelocity,
-            IMapView<bool> boundary, double dt)
+            ArrayMap<bool> boundary, double visc, double coeff, double dt)
         {
-            //foreach (Coord p in Density.Positions())
-            //{
-            //    double decay = Math.Pow(1 - 0.4, dt);
-            //    Density[p] *= decay;
-            //}
-
             int w = newDensity.Width;
             int h = newDensity.Height;
 
@@ -29,17 +23,15 @@ namespace Gaserel
             var vy = new ArrayMap<double>(w, h);
             var px = new ArrayMap<double>(w, h);
             var py = new ArrayMap<double>(w, h);
-            var walk = new ArrayMap<bool>(w, h);
 
             foreach (Coord p in velocity.Positions())
             {
                 (vx[p], vy[p]) = velocity[p];
                 (px[p], py[p]) = newVelocity[p];
-                walk[p] = boundary[p];
             }
 
-            UpdateVelocity(vx, vy, px, py, walk, 0.01, dt);
-            UpdateDensity(density, newDensity, vx, vy, walk, 0.1, dt);
+            UpdateVelocity(vx, vy, px, py, boundary, visc, dt);
+            UpdateDensity(density, newDensity, vx, vy, boundary, coeff, dt);
 
             foreach (Coord p in vx.Positions())
             {

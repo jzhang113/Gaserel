@@ -7,6 +7,7 @@ using GoRogue.MapViews;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Threading.Tasks;
 using Utils;
 
 namespace Gaserel
@@ -29,7 +30,7 @@ namespace Gaserel
             Animations = new AnimationHandler();
             rand = new Random();
 
-            var engine = new Engine(Width, Height, "Gaserel", false, StepUpdate, Render, Animations);
+            var engine = new Engine(Width, Height, "Gaserel", true, StepUpdate, Render, Animations);
 
             map = new Map(Width, Height, 1, Distance.MANHATTAN);
             ISettableMapView<bool> mapview = new ArrayMap<bool>(Width, Height);
@@ -39,7 +40,9 @@ namespace Gaserel
             _gasLayers = new List<GasInfo>()
             {
                 new GasInfo(Width, Height, Color.Red),
-                new GasInfo(Width, Height, Color.Blue)
+                new GasInfo(Width, Height, Color.Blue),
+                new GasInfo(Width, Height, Color.Green),
+                new GasInfo(Width, Height, Color.Purple)
             };
 
             Coord p1 = map.Terrain.RandomPosition((_, tile) => tile.IsWalkable);
@@ -100,13 +103,20 @@ namespace Gaserel
 
             foreach (ISpatialTuple<IGameObject> st in map.Entities)
             {
-                st.Item.GetComponent<EmitComponent>()?.SetGasMap(st.Position);
+                st.Item.GetComponent<EmitComponent>()?.Emit();
             }
 
-            foreach (GasInfo gas in _gasLayers)
+            // force the walkability map to be an ArrayMap for performance
+            var fastWalk = new ArrayMap<bool>(Width, Height);
+            foreach (Coord p in map.Positions())
             {
-                gas.Update(map.WalkabilityView);
+                fastWalk[p] = map.WalkabilityView[p];
             }
+
+            Parallel.ForEach(_gasLayers, gas =>
+            {
+                gas.Update(fastWalk);
+            });
 
             return false;
         }
